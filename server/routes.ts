@@ -25,11 +25,12 @@ export async function registerRoutes(
   }
 
   const isProduction = process.env.NODE_ENV === "production";
+  const isVercel = !!process.env.VERCEL;
   
   app.use(
     session({
       store: MongoStore.create({
-        client: mongoose.connection.getClient() as any,
+        mongoUrl: mongoUrl,
         collectionName: "sessions",
       }),
       secret: process.env.SESSION_SECRET || "grow4bot-secret-key",
@@ -39,8 +40,8 @@ export async function registerRoutes(
       cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
+        secure: isProduction || isVercel,
+        sameSite: (isProduction || isVercel) ? "none" : "lax",
       },
     })
   );
