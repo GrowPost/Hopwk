@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI || "";
-
-if (!MONGODB_URI) {
-  throw new Error("MONGODB_URI must be set in environment variables");
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI || "";
+  if (!uri) {
+    throw new Error("MONGODB_URI must be set in environment variables");
+  }
+  return uri;
 }
 
 interface GlobalMongoose {
@@ -31,7 +33,7 @@ export async function connectDB() {
       bufferCommands: false,
     };
 
-    cached!.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+    cached!.promise = mongoose.connect(getMongoUri(), opts).then((mongoose) => {
       return mongoose;
     });
   }
