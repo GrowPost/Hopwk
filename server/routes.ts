@@ -6,6 +6,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import { connectDB, mongoose } from "./db";
 import { loginSchema, registerSchema, insertProductSchema } from "@shared/schema";
+import config, { validateConfig } from "./config";
 
 declare module "express-session" {
   interface SessionData {
@@ -17,31 +18,24 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  validateConfig();
   await connectDB();
-
-  const mongoUrl = process.env.MONGODB_URI;
-  if (!mongoUrl) {
-    throw new Error("MONGODB_URI must be set");
-  }
-
-  const isProduction = process.env.NODE_ENV === "production";
-  const isVercel = !!process.env.VERCEL;
   
   app.use(
     session({
       store: MongoStore.create({
-        mongoUrl: mongoUrl,
+        mongoUrl: config.mongodb.uri,
         collectionName: "sessions",
       }),
-      secret: process.env.SESSION_SECRET || "grow4bot-secret-key",
+      secret: config.session.secret,
       resave: false,
       saveUninitialized: false,
       proxy: true,
       cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        httpOnly: true,
-        secure: isProduction || isVercel,
-        sameSite: (isProduction || isVercel) ? "none" : "lax",
+        maxAge: config.cookie.maxAge,
+        httpOnly: config.cookie.httpOnly,
+        secure: config.cookie.secure,
+        sameSite: config.cookie.sameSite,
       },
     })
   );

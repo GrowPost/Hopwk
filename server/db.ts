@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
+import config from "./config";
 
 function getMongoUri(): string {
-  const uri = process.env.MONGODB_URI || "";
-  if (!uri) {
+  if (!config.mongodb.uri) {
     throw new Error("MONGODB_URI must be set in environment variables");
   }
-  return uri;
+  return config.mongodb.uri;
 }
 
 interface GlobalMongoose {
