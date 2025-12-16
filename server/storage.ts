@@ -2,7 +2,9 @@ import {
   UserModel, 
   ProductModel, 
   PurchaseModel, 
-  TransactionModel,
+  TransactionModel
+} from "./models";
+import { 
   type User, 
   type InsertUser, 
   type Product, 
