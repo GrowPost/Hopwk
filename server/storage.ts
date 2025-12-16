@@ -1,8 +1,8 @@
 import { 
-  User as UserModel, 
-  Product as ProductModel, 
-  Purchase as PurchaseModel, 
-  Transaction as TransactionModel,
+  UserModel, 
+  ProductModel, 
+  PurchaseModel, 
+  TransactionModel,
   type User, 
   type InsertUser, 
   type Product, 
@@ -148,9 +148,9 @@ export class DatabaseStorage implements IStorage {
     await connectDB();
     const newProduct = await ProductModel.create({
       name: product.name,
-      description: product.description,
+      description: product.description || "",
       price: product.price,
-      image: product.image,
+      image: product.image || "",
       stockData: product.stockData || [],
       category: product.category || "general",
     });
@@ -160,7 +160,16 @@ export class DatabaseStorage implements IStorage {
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
     await connectDB();
     if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
-    const updated = await ProductModel.findByIdAndUpdate(id, product, { new: true });
+    
+    const updateData: Record<string, any> = {};
+    if (product.name !== undefined) updateData.name = product.name;
+    if (product.description !== undefined) updateData.description = product.description || "";
+    if (product.price !== undefined) updateData.price = product.price;
+    if (product.image !== undefined) updateData.image = product.image || "";
+    if (product.stockData !== undefined) updateData.stockData = product.stockData;
+    if (product.category !== undefined) updateData.category = product.category;
+    
+    const updated = await ProductModel.findByIdAndUpdate(id, updateData, { new: true });
     return updated ? toProduct(updated) : undefined;
   }
 

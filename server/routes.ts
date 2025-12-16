@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-import { connectDB } from "./db";
+import { connectDB, mongoose } from "./db";
+import { loginSchema, registerSchema, insertProductSchema } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -26,7 +27,7 @@ export async function registerRoutes(
   app.use(
     session({
       store: MongoStore.create({
-        mongoUrl,
+        client: mongoose.connection.getClient() as any,
         collectionName: "sessions",
       }),
       secret: process.env.SESSION_SECRET || "grow4bot-secret-key",
@@ -61,15 +62,12 @@ export async function registerRoutes(
 
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ message: "Email and password are required" });
+      const parseResult = registerSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: parseResult.error.errors[0]?.message || "Invalid input" });
       }
 
-      if (password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
-      }
+      const { email, password } = parseResult.data;
 
       const existing = await storage.getUserByEmail(email);
       if (existing) {
@@ -97,11 +95,12 @@ export async function registerRoutes(
 
   app.post("/api/auth/login", async (req, res) => {
     try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ message: "Email and password are required" });
+      const parseResult = loginSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: parseResult.error.errors[0]?.message || "Invalid input" });
       }
+
+      const { email, password } = parseResult.data;
 
       const user = await storage.getUserByEmail(email);
       if (!user) {
@@ -246,7 +245,7 @@ export async function registerRoutes(
       const userId = req.session.userId!;
       const { amount } = req.body;
 
-      if (!amount || amount <= 0) {
+      if (typeof amount !== "number" || amount <= 0) {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
@@ -288,6 +287,10 @@ export async function registerRoutes(
       const { id } = req.params;
       const { banned } = req.body;
 
+      if (typeof banned !== "boolean") {
+        return res.status(400).json({ message: "Invalid banned value" });
+      }
+
       const user = await storage.updateUserBanned(id, banned);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -306,7 +309,7 @@ export async function registerRoutes(
       const { id } = req.params;
       const { amount } = req.body;
 
-      if (!amount || amount <= 0) {
+      if (typeof amount !== "number" || amount <= 0) {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
@@ -334,21 +337,12 @@ export async function registerRoutes(
 
   app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
-      const { name, description, price, image, stockData, category } = req.body;
-
-      if (!name || price === undefined) {
-        return res.status(400).json({ message: "Name and price are required" });
+      const parseResult = insertProductSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: parseResult.error.errors[0]?.message || "Invalid input" });
       }
 
-      const product = await storage.createProduct({
-        name,
-        description,
-        price,
-        image,
-        stockData: stockData || [],
-        category: category || "general",
-      });
-
+      const product = await storage.createProduct(parseResult.data);
       res.status(201).json(product);
     } catch (error: any) {
       console.error("Create product error:", error);

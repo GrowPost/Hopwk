@@ -52,9 +52,9 @@ const UserSchema = new Schema<IUser>({
 
 const ProductSchema = new Schema<IProduct>({
   name: { type: String, required: true },
-  description: { type: String },
+  description: { type: String, default: "" },
   price: { type: Number, required: true },
-  image: { type: String },
+  image: { type: String, default: "" },
   stockData: { type: [String], default: [] },
   category: { type: String, required: true, default: "general" },
   createdAt: { type: Date, default: Date.now },
@@ -77,10 +77,10 @@ const TransactionSchema = new Schema<ITransaction>({
   createdAt: { type: Date, default: Date.now },
 });
 
-export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
-export const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
-export const Purchase = mongoose.models.Purchase || mongoose.model<IPurchase>("Purchase", PurchaseSchema);
-export const Transaction = mongoose.models.Transaction || mongoose.model<ITransaction>("Transaction", TransactionSchema);
+export const UserModel = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);
+export const ProductModel = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);
+export const PurchaseModel = mongoose.models.Purchase || mongoose.model<IPurchase>("Purchase", PurchaseSchema);
+export const TransactionModel = mongoose.models.Transaction || mongoose.model<ITransaction>("Transaction", TransactionSchema);
 
 export type User = {
   id: string;
@@ -122,34 +122,39 @@ export type Transaction = {
   createdAt: Date;
 };
 
-export type InsertUser = {
-  email: string;
-  password: string;
-};
+export const insertUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
 
-export type InsertProduct = {
-  name: string;
-  description?: string | null;
-  price: number;
-  image?: string | null;
-  stockData?: string[];
-  category?: string;
-};
+export const insertProductSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  price: z.number().positive(),
+  image: z.string().optional().nullable(),
+  stockData: z.array(z.string()).optional(),
+  category: z.string().optional(),
+});
 
-export type InsertPurchase = {
-  userId: string;
-  productId: string;
-  productName: string;
-  price: number;
-  stockData: string;
-};
+export const insertPurchaseSchema = z.object({
+  userId: z.string(),
+  productId: z.string(),
+  productName: z.string(),
+  price: z.number(),
+  stockData: z.string(),
+});
 
-export type InsertTransaction = {
-  userId: string;
-  type: string;
-  amount: number;
-  description: string;
-};
+export const insertTransactionSchema = z.object({
+  userId: z.string(),
+  type: z.string(),
+  amount: z.number(),
+  description: z.string(),
+});
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type InsertPurchase = z.infer<typeof insertPurchaseSchema>;
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 
 export const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
