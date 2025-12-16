@@ -24,6 +24,8 @@ export async function registerRoutes(
     throw new Error("MONGODB_URI must be set");
   }
 
+  const isProduction = process.env.NODE_ENV === "production";
+  
   app.use(
     session({
       store: MongoStore.create({
@@ -33,11 +35,12 @@ export async function registerRoutes(
       secret: process.env.SESSION_SECRET || "grow4bot-secret-key",
       resave: false,
       saveUninitialized: false,
+      proxy: true,
       cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
       },
     })
   );
