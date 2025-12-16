@@ -1,15 +1,69 @@
 import { 
-  users, products, purchases, transactions,
-  type User, type InsertUser, 
-  type Product, type InsertProduct,
-  type Purchase, type InsertPurchase,
-  type Transaction, type InsertTransaction
+  User as UserModel, 
+  Product as ProductModel, 
+  Purchase as PurchaseModel, 
+  Transaction as TransactionModel,
+  type User, 
+  type InsertUser, 
+  type Product, 
+  type InsertProduct,
+  type Purchase, 
+  type InsertPurchase,
+  type Transaction, 
+  type InsertTransaction
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { connectDB } from "./db";
+import mongoose from "mongoose";
+
+function toUser(doc: any): User {
+  return {
+    id: doc._id.toString(),
+    email: doc.email,
+    password: doc.password,
+    balance: doc.balance,
+    isAdmin: doc.isAdmin,
+    isBanned: doc.isBanned,
+    createdAt: doc.createdAt,
+  };
+}
+
+function toProduct(doc: any): Product {
+  return {
+    id: doc._id.toString(),
+    name: doc.name,
+    description: doc.description || null,
+    price: doc.price,
+    image: doc.image || null,
+    stockData: doc.stockData || [],
+    category: doc.category,
+    createdAt: doc.createdAt,
+  };
+}
+
+function toPurchase(doc: any): Purchase {
+  return {
+    id: doc._id.toString(),
+    userId: doc.userId.toString(),
+    productId: doc.productId.toString(),
+    productName: doc.productName,
+    price: doc.price,
+    stockData: doc.stockData,
+    purchaseDate: doc.purchaseDate,
+  };
+}
+
+function toTransaction(doc: any): Transaction {
+  return {
+    id: doc._id.toString(),
+    userId: doc.userId.toString(),
+    type: doc.type,
+    amount: doc.amount,
+    description: doc.description,
+    createdAt: doc.createdAt,
+  };
+}
 
 export interface IStorage {
-  // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser & { isAdmin?: boolean }): Promise<User>;
@@ -17,7 +71,6 @@ export interface IStorage {
   updateUserBanned(id: string, banned: boolean): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
 
-  // Products
   getProduct(id: string): Promise<Product | undefined>;
   getAllProducts(): Promise<Product[]>;
   createProduct(product: InsertProduct): Promise<Product>;
@@ -25,136 +78,141 @@ export interface IStorage {
   deleteProduct(id: string): Promise<boolean>;
   updateProductStock(id: string, stockData: string[]): Promise<Product | undefined>;
 
-  // Purchases
   createPurchase(purchase: InsertPurchase): Promise<Purchase>;
   getUserPurchases(userId: string): Promise<Purchase[]>;
 
-  // Transactions
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
   getUserTransactions(userId: string): Promise<Transaction[]>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // Users
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const user = await UserModel.findById(id);
+    return user ? toUser(user) : undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
+    await connectDB();
+    const user = await UserModel.findOne({ email });
+    return user ? toUser(user) : undefined;
   }
 
   async createUser(insertUser: InsertUser & { isAdmin?: boolean }): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: insertUser.email,
-        password: insertUser.password,
-        isAdmin: insertUser.isAdmin || false,
-        balance: 0,
-        isBanned: false,
-      })
-      .returning();
-    return user;
+    await connectDB();
+    const user = await UserModel.create({
+      email: insertUser.email,
+      password: insertUser.password,
+      isAdmin: insertUser.isAdmin || false,
+      balance: 0,
+      isBanned: false,
+    });
+    return toUser(user);
   }
 
   async updateUserBalance(id: string, balance: number): Promise<User | undefined> {
-    const [user] = await db
-      .update(users)
-      .set({ balance })
-      .where(eq(users.id, id))
-      .returning();
-    return user || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const user = await UserModel.findByIdAndUpdate(id, { balance }, { new: true });
+    return user ? toUser(user) : undefined;
   }
 
   async updateUserBanned(id: string, banned: boolean): Promise<User | undefined> {
-    const [user] = await db
-      .update(users)
-      .set({ isBanned: banned })
-      .where(eq(users.id, id))
-      .returning();
-    return user || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const user = await UserModel.findByIdAndUpdate(id, { isBanned: banned }, { new: true });
+    return user ? toUser(user) : undefined;
   }
 
   async getAllUsers(): Promise<User[]> {
-    return db.select().from(users).orderBy(desc(users.createdAt));
+    await connectDB();
+    const users = await UserModel.find().sort({ createdAt: -1 });
+    return users.map(toUser);
   }
 
-  // Products
   async getProduct(id: string): Promise<Product | undefined> {
-    const [product] = await db.select().from(products).where(eq(products.id, id));
-    return product || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const product = await ProductModel.findById(id);
+    return product ? toProduct(product) : undefined;
   }
 
   async getAllProducts(): Promise<Product[]> {
-    return db.select().from(products).orderBy(desc(products.createdAt));
+    await connectDB();
+    const products = await ProductModel.find().sort({ createdAt: -1 });
+    return products.map(toProduct);
   }
 
   async createProduct(product: InsertProduct): Promise<Product> {
-    const [newProduct] = await db
-      .insert(products)
-      .values(product)
-      .returning();
-    return newProduct;
+    await connectDB();
+    const newProduct = await ProductModel.create({
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      image: product.image,
+      stockData: product.stockData || [],
+      category: product.category || "general",
+    });
+    return toProduct(newProduct);
   }
 
   async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
-    const [updated] = await db
-      .update(products)
-      .set(product)
-      .where(eq(products.id, id))
-      .returning();
-    return updated || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const updated = await ProductModel.findByIdAndUpdate(id, product, { new: true });
+    return updated ? toProduct(updated) : undefined;
   }
 
   async deleteProduct(id: string): Promise<boolean> {
-    const result = await db.delete(products).where(eq(products.id, id));
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return false;
+    await ProductModel.findByIdAndDelete(id);
     return true;
   }
 
   async updateProductStock(id: string, stockData: string[]): Promise<Product | undefined> {
-    const [updated] = await db
-      .update(products)
-      .set({ stockData })
-      .where(eq(products.id, id))
-      .returning();
-    return updated || undefined;
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(id)) return undefined;
+    const updated = await ProductModel.findByIdAndUpdate(id, { stockData }, { new: true });
+    return updated ? toProduct(updated) : undefined;
   }
 
-  // Purchases
   async createPurchase(purchase: InsertPurchase): Promise<Purchase> {
-    const [newPurchase] = await db
-      .insert(purchases)
-      .values(purchase)
-      .returning();
-    return newPurchase;
+    await connectDB();
+    const newPurchase = await PurchaseModel.create({
+      userId: new mongoose.Types.ObjectId(purchase.userId),
+      productId: new mongoose.Types.ObjectId(purchase.productId),
+      productName: purchase.productName,
+      price: purchase.price,
+      stockData: purchase.stockData,
+    });
+    return toPurchase(newPurchase);
   }
 
   async getUserPurchases(userId: string): Promise<Purchase[]> {
-    return db
-      .select()
-      .from(purchases)
-      .where(eq(purchases.userId, userId))
-      .orderBy(desc(purchases.purchaseDate));
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(userId)) return [];
+    const purchases = await PurchaseModel.find({ userId: new mongoose.Types.ObjectId(userId) }).sort({ purchaseDate: -1 });
+    return purchases.map(toPurchase);
   }
 
-  // Transactions
   async createTransaction(transaction: InsertTransaction): Promise<Transaction> {
-    const [newTransaction] = await db
-      .insert(transactions)
-      .values(transaction)
-      .returning();
-    return newTransaction;
+    await connectDB();
+    const newTransaction = await TransactionModel.create({
+      userId: new mongoose.Types.ObjectId(transaction.userId),
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description,
+    });
+    return toTransaction(newTransaction);
   }
 
   async getUserTransactions(userId: string): Promise<Transaction[]> {
-    return db
-      .select()
-      .from(transactions)
-      .where(eq(transactions.userId, userId))
-      .orderBy(desc(transactions.createdAt));
+    await connectDB();
+    if (!mongoose.Types.ObjectId.isValid(userId)) return [];
+    const transactions = await TransactionModel.find({ userId: new mongoose.Types.ObjectId(userId) }).sort({ createdAt: -1 });
+    return transactions.map(toTransaction);
   }
 }
 

@@ -3,8 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from "bcrypt";
 import session from "express-session";
-import pgSession from "connect-pg-simple";
-import { pool } from "./db";
+import MongoStore from "connect-mongo";
+import { connectDB } from "./db";
 
 declare module "express-session" {
   interface SessionData {
@@ -16,29 +16,31 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Session setup
-  const PgStore = pgSession(session);
-  
+  await connectDB();
+
+  const mongoUrl = process.env.MONGODB_URI;
+  if (!mongoUrl) {
+    throw new Error("MONGODB_URI must be set");
+  }
+
   app.use(
     session({
-      store: new PgStore({
-        pool: pool,
-        tableName: "user_sessions",
-        createTableIfMissing: true,
+      store: MongoStore.create({
+        mongoUrl,
+        collectionName: "sessions",
       }),
       secret: process.env.SESSION_SECRET || "grow4bot-secret-key",
       resave: false,
       saveUninitialized: false,
       cookie: {
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: false,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
       },
     })
   );
 
-  // Auth middleware
   const requireAuth = (req: any, res: any, next: any) => {
     if (!req.session.userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -57,7 +59,6 @@ export async function registerRoutes(
     next();
   };
 
-  // Auth routes
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -151,7 +152,6 @@ export async function registerRoutes(
     res.json(userWithoutPassword);
   });
 
-  // Products routes
   app.get("/api/products", async (req, res) => {
     try {
       const products = await storage.getAllProducts();
@@ -189,18 +189,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Insufficient balance" });
       }
 
-      // Get stock item
       const stockItem = product.stockData[0];
       const newStockData = product.stockData.slice(1);
 
-      // Update stock
       await storage.updateProductStock(id, newStockData);
 
-      // Deduct balance
       const newBalance = user.balance - product.price;
       await storage.updateUserBalance(userId, newBalance);
 
-      // Create purchase record
       const purchase = await storage.createPurchase({
         userId,
         productId: id,
@@ -209,7 +205,6 @@ export async function registerRoutes(
         stockData: stockItem,
       });
 
-      // Create transaction record
       await storage.createTransaction({
         userId,
         type: "purchase",
@@ -224,7 +219,6 @@ export async function registerRoutes(
     }
   });
 
-  // Purchases routes
   app.get("/api/purchases", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -236,7 +230,6 @@ export async function registerRoutes(
     }
   });
 
-  // Transactions routes
   app.get("/api/transactions", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -248,7 +241,6 @@ export async function registerRoutes(
     }
   });
 
-  // Wallet routes
   app.post("/api/wallet/topup", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
@@ -280,7 +272,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin routes
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
